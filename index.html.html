@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solana Token Creator - No Fees</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+    <script src="https://unpkg.com/@solana/spl-token@0.3.9/lib/index.iife.min.js"></script>
+    <script>
+        // Buffer polyfill for browser
+        (function() {
+            if (typeof window.Buffer === 'undefined') {
+                window.Buffer = {
+                    from: function(data) {
+                        if (Array.isArray(data)) {
+                            return new Uint8Array(data);
+                        }
+                        if (typeof data === 'string') {
+                            const encoder = new TextEncoder();
+                            return encoder.encode(data);
+                        }
+                        return new Uint8Array(data);
+                    },
+                    alloc: function(size) {
+                        return new Uint8Array(size);
+                    }
+                };
+            }
+        })();
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #581c87 0%, #1e3a8a 50%, #312e81 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        .header {
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            background: rgba(255,255,255,0.05);
+        }
+        .header-inner {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.25rem;
+            font-weight: bold;
+        }
+        .logo svg {
+            width: 32px;
+            height: 32px;
+            color: #c084fc;
+        }
+        .btn {
+            padding: 0.5rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .btn-primary {
+            background: linear-gradient(90deg, #a855f7, #ec4899);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(90deg, #9333ea, #db2777);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(168,85,247,0.3);
+        }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-danger {
+            background: rgba(239,68,68,0.2);
+            color: white;
+        }
+        .btn-danger:hover {
+            background: rgba(239,68,68,0.3);
+        }
+        .wallet-badge {
+            padding: 0.5rem 1rem;
+            background: rgba(255,255,255,0.1);
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-family: monospace;
+        }
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 3rem 1rem;
+        }
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid rgba(255,255,255,0.1);
+        }
+        .tab {
+            padding: 1rem 1.5rem;
+            background: none;
+            border: none;
+            color: rgba(255,255,255,0.6);
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+        .tab:hover {
+            color: rgba(255,255,255,0.8);
+        }
+        .tab.active {
+            color: #c084fc;
+            border-bottom-color: #c084fc;
+        }
+        .hero {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        .hero h1 {
+            font-size: 3rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            background: linear-gradient(90deg, #c084fc, #f9a8d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero .subtitle {
+            font-size: 1.25rem;
+            color: #d1d5db;
+            margin-bottom: 0.5rem;
+        }
+        .hero .small {
+            font-size: 0.875rem;
+            color: #c084fc;
+        }
+        .alert {
+            padding: 1rem;
+            border-radius: 0.75rem;
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-start;
+        }
+        .alert svg {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        .alert-info {
+            background: rgba(59,130,246,0.1);
+            border: 1px solid rgba(59,130,246,0.3);
+        }
+        .alert-error {
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.3);
+        }
+        .alert-success {
+            background: rgba(34,197,94,0.1);
+            border: 1px solid rgba(34,197,94,0.3);
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+        @media (min-width: 768px) {
+            .grid {
+                grid-template-columns: 2fr 1fr;
+            }
+        }
+        .card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(20px);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: rgba(255,255,255,0.9);
+        }
+        .input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 0.75rem;
+            color: white;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        .input:focus {
+            outline: none;
+            border-color: #a855f7;
+            background: rgba(255,255,255,0.12);
+            box-shadow: 0 0 0 3px rgba(168,85,247,0.2);
+        }
+        .input::placeholder {
+            color: rgba(255,255,255,0.4);
+        }
+        .hint {
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.5);
+            margin-top: 0.25rem;
+        }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        .upload-area {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .preview-img {
+            width: 4rem;
+            height: 4rem;
+            border-radius: 0.75rem;
+            object-fit: cover;
+            border: 2px solid #a855f7;
+        }
+        .upload-btn {
+            flex: 1;
+            padding: 0.875rem 1rem;
+            background: rgba(255,255,255,0.08);
+            border: 1px dashed rgba(255,255,255,0.3);
+            border-radius: 0.75rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: all 0.3s;
+            color: rgba(255,255,255,0.8);
+        }
+        .upload-btn:hover {
+            background: rgba(255,255,255,0.15);
+            border-color: #a855f7;
+        }
+        .textarea {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 0.75rem;
+            color: white;
+            resize: none;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        .textarea:focus {
+            outline: none;
+            border-color: #a855f7;
+            background: rgba(255,255,255,0.12);
+            box-shadow: 0 0 0 3px rgba(168,85,247,0.2);
+        }
+        .link-btn {
+            color: #c084fc;
+            font-size: 0.875rem;
+            font-weight: 600;
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+        .link-btn:hover {
+            color: #d8b4fe;
+        }
+        .advanced {
+            padding: 1.25rem;
+            background: rgba(255,255,255,0.05);
+            border-radius: 0.75rem;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .checkbox-label {
+            display: flex;
+            gap: 0.75rem;
+            cursor: pointer;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+        .checkbox-label:last-child {
+            margin-bottom: 0;
+        }
+        .checkbox {
+            margin-top: 0.25rem;
+            width: 1.125rem;
+            height: 1.125rem;
+            accent-color: #a855f7;
+        }
+        .checkbox-text {
+            font-weight: 600;
+        }
+        .checkbox-hint {
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.5);
+            margin-top: 0.25rem;
+        }
+        .btn-create {
+            width: 100%;
+            padding: 1.25rem;
+            background: linear-gradient(90deg, #a855f7, #ec4899);
+            border-radius: 0.75rem;
+            font-weight: bold;
+            font-size: 1.125rem;
+            border: none;
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 20px 40px rgba(168,85,247,0.4);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .btn-create:hover:not(:disabled) {
+            background: linear-gradient(90deg, #9333ea, #db2777);
+            transform: translateY(-2px);
+            box-shadow: 0 25px 50px rgba(168,85,247,0.5);
+        }
+        .btn-create:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .sidebar-card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(20px);
+            border-radius: 1.25rem;
+            padding: 1.5rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 1.5rem;
+        }
+        .sidebar-title {
+            font-weight: bold;
+            font-size: 1.125rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .sidebar-title svg {
+            width: 20px;
+            height: 20px;
+            color: #c084fc;
+        }
+        .cost-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+            font-size: 0.875rem;
+            color: rgba(255,255,255,0.8);
+        }
+        .cost-total {
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 0.75rem;
+            margin-top: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+        .savings {
+            margin-top: 1rem;
+            padding: 0.875rem;
+            background: rgba(34,197,94,0.1);
+            border: 1px solid rgba(34,197,94,0.3);
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            color: #86efac;
+            text-align: center;
+            font-weight: 600;
+        }
+        .feature-list {
+            list-style: none;
+        }
+        .feature-item {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 0.875rem;
+            font-size: 0.875rem;
+            color: rgba(255,255,255,0.8);
+            align-items: center;
+        }
+        .checkmark {
+            color: #c084fc;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+        .step-list {
+            list-style: none;
+        }
+        .step-item {
+            display: flex;
+            gap: 0.875rem;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+            color: rgba(255,255,255,0.8);
+        }
+        .step-number {
+            width: 1.75rem;
+            height: 1.75rem;
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(168,85,247,0.4);
+        }
+        .external-link {
+            color: #86efac;
+            text-decoration: underline;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: color 0.3s;
+        }
+        .external-link:hover {
+            color: #6ee7b7;
+        }
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .flex-center {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .break-all {
+            word-break: break-all;
+        }
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function App() {
+            const [activeTab, setActiveTab] = useState('create');
+            const [network, setNetwork] = useState('mainnet');
+            const [customRpc, setCustomRpc] = useState('');
+            const [formData, setFormData] = useState({
+                name: '', symbol: '', decimals: 9, supply: '',
+                description: '', image: null, revokeMint: false, revokeFreeze: false
+            });
+            const [sendData, setSendData] = useState({
+                tokenAddress: '',
+                recipientAddress: '',
+                amount: ''
+            });
+
+            const [imagePreview, setImagePreview] = useState(null);
+            const [showAdvanced, setShowAdvanced] = useState(false);
+            const [walletAddress, setWalletAddress] = useState(null);
+            const [isConnecting, setIsConnecting] = useState(false);
+            const [isCreating, setIsCreating] = useState(false);
+            const [isSending, setIsSending] = useState(false);
+            const [createdToken, setCreatedToken] = useState(null);
+            const [error, setError] = useState(null);
+            const [txSignature, setTxSignature] = useState(null);
+
+            const getProvider = () => window.phantom?.solana?.isPhantom ? window.phantom.solana : null;
+
+            const connectWallet = async () => {
+                setIsConnecting(true);
+                setError(null);
+                const provider = getProvider();
+                if (!provider) {
+                    setError('Phantom wallet not found. Install from phantom.app');
+                    setIsConnecting(false);
+                    return;
+                }
+                try {
+                    const resp = await provider.connect();
+                    setWalletAddress(resp.publicKey.toString());
+                } catch (err) {
+                    setError('Failed to connect: ' + err.message);
+                }
+                setIsConnecting(false);
+            };
+
+            const disconnectWallet = async () => {
+                const provider = getProvider();
+                if (provider) {
+                    await provider.disconnect();
+                    setWalletAddress(null);
+                }
+            };
+
+            useEffect(() => {
+                const provider = getProvider();
+                if (provider) {
+                    provider.on('connect', (publicKey) => setWalletAddress(publicKey.toString()));
+                    provider.on('disconnect', () => setWalletAddress(null));
+                    if (provider.isConnected) provider.connect({ onlyIfTrusted: true }).catch(() => {});
+                }
+            }, []);
+
+            const handleInputChange = (e) => {
+                const { name, value, type, checked } = e.target;
+                setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+                setError(null);
+            };
+
+            const handleSendInputChange = (e) => {
+                const { name, value } = e.target;
+                setSendData(prev => ({ ...prev, [name]: value }));
+                setError(null);
+            };
+
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    if (!file.type.startsWith('image/')) {
+                        setError('Please upload a valid image');
+                        return;
+                    }
+                    if (file.size > 5 * 1024 * 1024) {
+                        setError('Image must be less than 5MB');
+                        return;
+                    }
+                    setFormData(prev => ({ ...prev, image: file }));
+                    const reader = new FileReader();
+                    reader.onloadend = () => setImagePreview(reader.result);
+                    reader.readAsDataURL(file);
+                    setError(null);
+                }
+            };
+
+            // Function to get working RPC connection
+            const getConnection = async () => {
+                // If custom RPC is provided, use it first
+                if (customRpc) {
+                    try {
+                        const conn = new window.solanaWeb3.Connection(customRpc, 'confirmed');
+                        await conn.getLatestBlockhash();
+                        return conn;
+                    } catch (err) {
+                        console.error('Custom RPC failed:', err);
+                    }
+                }
+
+                const endpoints = network === 'mainnet' ? [
+                    'https://api.mainnet-beta.solana.com',
+                    'https://solana-api.projectserum.com',
+                    'https://rpc.ankr.com/solana',
+                    'https://solana-mainnet.rpc.extrnode.com',
+                    'https://solana.public-rpc.com'
+                ] : [
+                    'https://api.devnet.solana.com',
+                    'https://rpc.ankr.com/solana_devnet'
+                ];
+                
+                for (const endpoint of endpoints) {
+                    try {
+                        const conn = new window.solanaWeb3.Connection(endpoint, 'confirmed');
+                        await conn.getLatestBlockhash();
+                        console.log('Connected to:', endpoint);
+                        return conn;
+                    } catch (err) {
+                        console.error('RPC failed:', endpoint, err);
+                        continue;
+                    }
+                }
+                throw new Error('All RPC endpoints failed. Try using a custom RPC URL below, or get a free RPC from helius.dev or quicknode.com');
+            };
+
+            const createToken = async () => {
+                if (!formData.name || !formData.symbol || !formData.supply) {
+                    setError('Please fill in Name, Symbol, and Supply');
+                    return;
+                }
+                if (!walletAddress) {
+                    setError('Please connect your wallet first');
+                    return;
+                }
+                if (parseFloat(formData.supply) <= 0) {
+                    setError('Supply must be greater than 0');
+                    return;
+                }
+
+                setIsCreating(true);
+                setError(null);
+                setTxSignature(null);
+
+                try {
+                    const provider = getProvider();
+                    if (!provider) throw new Error('Wallet not found');
+
+                    const connection = await getConnection();
+                    const walletPublicKey = provider.publicKey;
+                    const mintKeypair = window.solanaWeb3.Keypair.generate();
+                    const decimals = parseInt(formData.decimals);
+                    const supply = parseFloat(formData.supply) * Math.pow(10, decimals);
+
+                    // Use correct TOKEN_PROGRAM_ID
+                    const TOKEN_PROGRAM_ID = new window.solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+                    const ASSOCIATED_TOKEN_PROGRAM_ID = new window.solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+                    
+                    // Get rent exemption
+                    const mintRent = await connection.getMinimumBalanceForRentExemption(82);
+
+                    // Create transaction
+                    const transaction = new window.solanaWeb3.Transaction();
+
+                    // Create mint account
+                    transaction.add(
+                        window.solanaWeb3.SystemProgram.createAccount({
+                            fromPubkey: walletPublicKey,
+                            newAccountPubkey: mintKeypair.publicKey,
+                            space: 82,
+                            lamports: mintRent,
+                            programId: TOKEN_PROGRAM_ID,
+                        })
+                    );
+
+                    // Initialize mint
+                    const initMintData = new Uint8Array(67);
+                    initMintData[0] = 0; // InitializeMint instruction
+                    initMintData[1] = decimals;
+                    initMintData.set(walletPublicKey.toBytes(), 2);
+                    if (!formData.revokeFreeze) {
+                        initMintData[34] = 1;
+                        initMintData.set(walletPublicKey.toBytes(), 35);
+                    }
+
+                    const initMintIx = new window.solanaWeb3.TransactionInstruction({
+                        programId: TOKEN_PROGRAM_ID,
+                        keys: [
+                            { pubkey: mintKeypair.publicKey, isSigner: false, isWritable: true },
+                            { pubkey: window.solanaWeb3.SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+                        ],
+                        data: initMintData
+                    });
+                    transaction.add(initMintIx);
+
+                    // Get or create associated token account
+                    const associatedToken = await window.solanaWeb3.PublicKey.findProgramAddressSync(
+                        [
+                            walletPublicKey.toBuffer(),
+                            TOKEN_PROGRAM_ID.toBuffer(),
+                            mintKeypair.publicKey.toBuffer(),
+                        ],
+                        ASSOCIATED_TOKEN_PROGRAM_ID
+                    );
+
+                    // Create associated token account
+                    const createATAIx = new window.solanaWeb3.TransactionInstruction({
+                        programId: ASSOCIATED_TOKEN_PROGRAM_ID,
+                        keys: [
+                            { pubkey: walletPublicKey, isSigner: true, isWritable: true },
+                            { pubkey: associatedToken[0], isSigner: false, isWritable: true },
+                            { pubkey: walletPublicKey, isSigner: false, isWritable: false },
+                            { pubkey: mintKeypair.publicKey, isSigner: false, isWritable: false },
+                            { pubkey: window.solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
+                            { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+                        ],
+                        data: new Uint8Array(0)
+                    });
+                    transaction.add(createATAIx);
+
+                    // Mint tokens - convert supply to little-endian bytes
+                    const supplyBytes = new Uint8Array(8);
+                    const supplyNum = supply;
+                    for (let i = 0; i < 8; i++) {
+                        supplyBytes[i] = (supplyNum / Math.pow(2, 8 * i)) & 0xff;
+                    }
+
+                    const mintToData = new Uint8Array(9);
+                    mintToData[0] = 7; // MintTo instruction
+                    mintToData.set(supplyBytes, 1);
+
+                    const mintToIx = new window.solanaWeb3.TransactionInstruction({
+                        programId: TOKEN_PROGRAM_ID,
+                        keys: [
+                            { pubkey: mintKeypair.publicKey, isSigner: false, isWritable: true },
+                            { pubkey: associatedToken[0], isSigner: false, isWritable: true },
+                            { pubkey: walletPublicKey, isSigner: true, isWritable: false },
+                        ],
+                        data: mintToData
+                    });
+                    transaction.add(mintToIx);
+
+                    // Revoke mint authority if requested
+                    if (formData.revokeMint) {
+                        const revokeData = new Uint8Array(3);
+                        revokeData[0] = 6; // SetAuthority instruction
+                        revokeData[1] = 0; // MintTokens authority type
+                        revokeData[2] = 0; // No new authority
+
+                        const revokeIx = new window.solanaWeb3.TransactionInstruction({
+                            programId: TOKEN_PROGRAM_ID,
+                            keys: [
+                                { pubkey: mintKeypair.publicKey, isSigner: false, isWritable: true },
+                                { pubkey: walletPublicKey, isSigner: true, isWritable: false },
+                            ],
+                            data: revokeData
+                        });
+                        transaction.add(revokeIx);
+                    }
+
+                    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
+                    transaction.recentBlockhash = blockhash;
+                    transaction.lastValidBlockHeight = lastValidBlockHeight;
+                    transaction.feePayer = walletPublicKey;
+
+                    // Sign with mint keypair first
+                    transaction.partialSign(mintKeypair);
+
+                    // Sign with wallet
+                    const signedTransaction = await provider.signTransaction(transaction);
+                    
+                    // Send transaction
+                    const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
+                        skipPreflight: false,
+                        preflightCommitment: 'confirmed'
+                    });
+
+                    console.log('Transaction sent:', signature);
+
+                    // Confirm transaction
+                    await connection.confirmTransaction({
+                        signature,
+                        blockhash,
+                        lastValidBlockHeight
+                    }, 'confirmed');
+
+                    setTxSignature(signature);
+                    setCreatedToken({
+                        address: mintKeypair.publicKey.toString(),
+                        name: formData.name,
+                        symbol: formData.symbol,
+                        decimals: decimals,
+                        supply: formData.supply
+                    });
+
+                    setFormData({
+                        name: '', symbol: '', decimals: 9, supply: '',
+                        description: '', image: null, revokeMint: false, revokeFreeze: false
+                    });
+                    setImagePreview(null);
+
+                } catch (err) {
+                    console.error('Error:', err);
+                    setError('Failed to create token: ' + err.message);
+                }
+
+                setIsCreating(false);
+            };
+
+            const sendTokens = async () => {
+                if (!sendData.tokenAddress || !sendData.recipientAddress || !sendData.amount) {
+                    setError('Please fill in all fields');
+                    return;
+                }
+                if (!walletAddress) {
+                    setError('Please connect your wallet first');
+                    return;
+                }
+
+                setIsSending(true);
+                setError(null);
+                setTxSignature(null);
+
+                try {
+                    const provider = getProvider();
+                    if (!provider) throw new Error('Wallet not found');
+
+                    const connection = await getConnection();
+                    const walletPublicKey = provider.publicKey;
+                    const mintPubkey = new window.solanaWeb3.PublicKey(sendData.tokenAddress);
+                    const recipientPubkey = new window.solanaWeb3.PublicKey(sendData.recipientAddress);
+                    const TOKEN_PROGRAM_ID = new window.solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+
+                    // Get mint info to determine decimals
+                    const mintInfo = await connection.getAccountInfo(mintPubkey);
+                    if (!mintInfo) throw new Error('Token not found');
+                    const decimals = mintInfo.data[44];
+
+                    const amount = BigInt(Math.floor(parseFloat(sendData.amount) * Math.pow(10, decimals)));
+
+                    // Get sender's token account
+                    const [senderTokenAccount] = await window.solanaWeb3.PublicKey.findProgramAddress(
+                        [
+                            walletPublicKey.toBuffer(),
+                            TOKEN_PROGRAM_ID.toBuffer(),
+                            mintPubkey.toBuffer(),
+                        ],
+                        new window.solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
+                    );
+
+                    // Get recipient's token account
+                    const [recipientTokenAccount] = await window.solanaWeb3.PublicKey.findProgramAddress(
+                        [
+                            recipientPubkey.toBuffer(),
+                            TOKEN_PROGRAM_ID.toBuffer(),
+                            mintPubkey.toBuffer(),
+                        ],
+                        new window.solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
+                    );
+
+                    const transaction = new window.solanaWeb3.Transaction();
+
+                    // Check if recipient account exists
+                    const recipientAccountInfo = await connection.getAccountInfo(recipientTokenAccount);
+                    if (!recipientAccountInfo) {
+                        // Create associated token account for recipient
+                        transaction.add(
+                            new window.solanaWeb3.TransactionInstruction({
+                                keys: [
+                                    { pubkey: walletPublicKey, isSigner: true, isWritable: true },
+                                    { pubkey: recipientTokenAccount, isSigner: false, isWritable: true },
+                                    { pubkey: recipientPubkey, isSigner: false, isWritable: false },
+                                    { pubkey: mintPubkey, isSigner: false, isWritable: false },
+                                    { pubkey: window.solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
+                                    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+                                ],
+                                programId: new window.solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL'),
+                                data: Buffer.from([])
+                            })
+                        );
+                    }
+
+                    // Transfer tokens
+                    const transferData = Buffer.alloc(9);
+                    transferData[0] = 3; // Transfer instruction
+                    transferData.writeBigUInt64LE(amount, 1);
+
+                    transaction.add(
+                        new window.solanaWeb3.TransactionInstruction({
+                            keys: [
+                                { pubkey: senderTokenAccount, isSigner: false, isWritable: true },
+                                { pubkey: recipientTokenAccount, isSigner: false, isWritable: true },
+                                { pubkey: walletPublicKey, isSigner: true, isWritable: false }
+                            ],
+                            programId: TOKEN_PROGRAM_ID,
+                            data: transferData
+                        })
+                    );
+
+                    const { blockhash } = await connection.getLatestBlockhash();
+                    transaction.recentBlockhash = blockhash;
+                    transaction.feePayer = walletPublicKey;
+
+                    const signed = await provider.signTransaction(transaction);
+                    const signature = await connection.sendRawTransaction(signed.serialize());
+                    await connection.confirmTransaction(signature);
+
+                    setTxSignature(signature);
+                    setSendData({ tokenAddress: '', recipientAddress: '', amount: '' });
+                    alert(`Successfully sent ${sendData.amount} tokens!`);
+
+                } catch (err) {
+                    console.error('Error:', err);
+                    setError('Failed to send tokens: ' + err.message);
+                }
+
+                setIsSending(false);
+            };
+
+            return (
+                <div>
+                    <div className="header">
+                        <div className="header-inner">
+                            <div className="logo">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                <span>Token Creator</span>
+                            </div>
+                            {!walletAddress ? (
+                                <button onClick={connectWallet} disabled={isConnecting} className="btn btn-primary">
+                                    {isConnecting && (
+                                        <svg className="spinner" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <circle cx="12" cy="12" r="10" strokeWidth="4" style={{opacity: 0.25}}></circle>
+                                            <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" style={{opacity: 0.75}}></path>
+                                        </svg>
+                                    )}
+                                    {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                                </button>
+                            ) : (
+                                <div className="flex-center">
+                                    <div className="wallet-badge">
+                                        {walletAddress.slice(0, 4)}...{walletAddress.slice(-4)}
+                                    </div>
+                                    <button onClick={disconnectWallet} className="btn btn-danger">
+                                        Disconnect
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="container">
+                        <div className="hero">
+                            <h1>Solana Token Creator</h1>
+                            <p className="subtitle">Create & manage SPL tokens with zero markup fees</p>
+                            <p className="small">Only pay actual network costs (~0.015 SOL)</p>
+                        </div>
+
+                        <div className="alert alert-info">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div style={{fontSize: '0.875rem'}}>
+                                <p style={{fontWeight: 600, marginBottom: '0.5rem'}}>Network & RPC Settings</p>
+                                <div style={{display: 'flex', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap'}}>
+                                    <label style={{display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer'}}>
+                                        <input 
+                                            type="radio" 
+                                            checked={network === 'devnet'} 
+                                            onChange={() => setNetwork('devnet')}
+                                            style={{accentColor: '#a855f7'}}
+                                        />
+                                        <span>Devnet (Test - Free SOL)</span>
+                                    </label>
+                                    <label style={{display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer'}}>
+                                        <input 
+                                            type="radio" 
+                                            checked={network === 'mainnet'} 
+                                            onChange={() => setNetwork('mainnet')}
+                                            style={{accentColor: '#a855f7'}}
+                                        />
+                                        <span>Mainnet (Real - Costs SOL)</span>
+                                    </label>
+                                </div>
+                                <div style={{marginTop: '0.75rem'}}>
+                                    <label style={{display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem'}}>Custom RPC URL (Optional - Recommended)</label>
+                                    <input
+                                        type="text"
+                                        value={customRpc}
+                                        onChange={(e) => setCustomRpc(e.target.value)}
+                                        placeholder="https://your-rpc-url.com (get free from helius.dev)"
+                                        className="input"
+                                        style={{fontSize: '0.875rem', padding: '0.5rem'}}
+                                    />
+                                </div>
+                                <p style={{marginTop: '0.5rem', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)'}}>
+                                    💡 Tip: Get a free RPC from <a href="https://helius.dev" target="_blank" style={{color: '#86efac', textDecoration: 'underline'}}>helius.dev</a> or <a href="https://quicknode.com" target="_blank" style={{color: '#86efac', textDecoration: 'underline'}}>quicknode.com</a> for better reliability
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="tabs">
+                            <button 
+                                className={`tab ${activeTab === 'create' ? 'active' : ''}`}
+                                onClick={() => { setActiveTab('create'); setError(null); setTxSignature(null); }}
+                            >
+                                Create Token
+                            </button>
+                            <button 
+                                className={`tab ${activeTab === 'send' ? 'active' : ''}`}
+                                onClick={() => { setActiveTab('send'); setError(null); setTxSignature(null); }}
+                            >
+                                Send Tokens
+                            </button>
+                            <button 
+                                className={`tab ${activeTab === 'liquidity' ? 'active' : ''}`}
+                                onClick={() => { setActiveTab('liquidity'); setError(null); setTxSignature(null); }}
+                            >
+                                Add Liquidity
+                            </button>
+                        </div>
+
+                        {error && (
+                            <div className="alert alert-error">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div style={{color: '#fca5a5', fontSize: '0.875rem'}}>{error}</div>
+                            </div>
+                        )}
+
+                        {createdToken && activeTab === 'create' && (
+                            <div className="alert alert-success">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div>
+                                    <p style={{fontWeight: 600, color: '#86efac', fontSize: '1.125rem', marginBottom: '0.5rem'}}>Token Created Successfully!</p>
+                                    <div style={{fontSize: '0.875rem', color: '#bbf7d0'}}>
+                                        <p style={{marginBottom: '0.5rem'}}><strong>Address:</strong> <span className="break-all">{createdToken.address}</span></p>
+                                        <p style={{marginBottom: '0.5rem'}}><strong>Name:</strong> {createdToken.name}</p>
+                                        <p style={{marginBottom: '0.5rem'}}><strong>Symbol:</strong> {createdToken.symbol}</p>
+                                        <p style={{marginBottom: '0.5rem'}}><strong>Supply:</strong> {createdToken.supply}</p>
+                                        {txSignature && (
+                                            <a 
+                                                href={`https://solscan.io/tx/${txSignature}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="external-link"
+                                            >
+                                                View on Solscan
+                                                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                </svg>
+                                            </a>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {txSignature && activeTab === 'send' && (
+                            <div className="alert alert-success">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div>
+                                    <p style={{fontWeight: 600, color: '#86efac', fontSize: '1.125rem', marginBottom: '0.5rem'}}>Tokens Sent Successfully!</p>
+                                    <a 
+                                        href={`https://solscan.io/tx/${txSignature}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="external-link"
+                                    >
+                                        View on Solscan
+                                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                        </svg>
+                                    </a>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="grid">
+                            <div>
+                                {activeTab === 'create' && (
+                                    <div className="card">
+                                        <div className="form-group">
+                                            <label className="label">Token Name *</label>
+                                            <input
+                                                type="text"
+                                                name="name"
+                                                value={formData.name}
+                                                onChange={handleInputChange}
+                                                placeholder="My Awesome Token"
+                                                className="input"
+                                            />
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label className="label">Symbol *</label>
+                                            <input
+                                                type="text"
+                                                name="symbol"
+                                                value={formData.symbol}
+                                                onChange={handleInputChange}
+                                                placeholder="MAT"
+                                                maxLength={8}
+                                                className="input"
+                                            />
+                                            <p className="hint">Max 8 characters</p>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <div className="grid-2">
+                                                <div>
+                                                    <label className="label">Supply *</label>
+                                                    <input
+                                                        type="number"
+                                                        name="supply"
+                                                        value={formData.supply}
+                                                        onChange={handleInputChange}
+                                                        placeholder="1000000"
+                                                        min="0"
+                                                        step="any"
+                                                        className="input"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="label">Decimals</label>
+                                                    <input
+                                                        type="number"
+                                                        name="decimals"
+                                                        value={formData.decimals}
+                                                        onChange={handleInputChange}
+                                                        min="0"
+                                                        max="9"
+                                                        className="input"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label className="label">Token Image (Optional)</label>
+                                            <div className="upload-area">
+                                                {imagePreview && (
+                                                    <img src={imagePreview} alt="Preview" className="preview-img" />
+                                                )}
+                                                <label className="upload-btn">
+                                                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                    </svg>
+                                                    <span style={{fontSize: '0.875rem'}}>{formData.image ? formData.image.name : 'Upload Image'}</span>
+                                                    <input type="file" accept="image/*" onChange={handleImageUpload} style={{display: 'none'}} />
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label className="label">Description (Optional)</label>
+                                            <textarea
+                                                name="description"
+                                                value={formData.description}
+                                                onChange={handleInputChange}
+                                                placeholder="Describe your token..."
+                                                rows="3"
+                                                className="textarea"
+                                            />
+                                        </div>
+
+                                        <div className="form-group">
+                                            <button onClick={() => setShowAdvanced(!showAdvanced)} className="link-btn">
+                                                {showAdvanced ? '− Hide' : '+ Show'} Advanced Options
+                                            </button>
+                                        </div>
+
+                                        {showAdvanced && (
+                                            <div className="form-group">
+                                                <div className="advanced">
+                                                    <label className="checkbox-label">
+                                                        <input
+                                                            type="checkbox"
+                                                            name="revokeFreeze"
+                                                            checked={formData.revokeFreeze}
+                                                            onChange={handleInputChange}
+                                                            className="checkbox"
+                                                        />
+                                                        <div>
+                                                            <div className="checkbox-text">Revoke Freeze Authority</div>
+                                                            <div className="checkbox-hint">Required for liquidity pools</div>
+                                                        </div>
+                                                    </label>
+                                                    <label className="checkbox-label">
+                                                        <input
+                                                            type="checkbox"
+                                                            name="revokeMint"
+                                                            checked={formData.revokeMint}
+                                                            onChange={handleInputChange}
+                                                            className="checkbox"
+                                                        />
+                                                        <div>
+                                                            <div className="checkbox-text">Revoke Mint Authority</div>
+                                                            <div className="checkbox-hint">Locks total supply permanently</div>
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <button onClick={createToken} disabled={!walletAddress || isCreating} className="btn-create">
+                                            {isCreating ? (
+                                                <>
+                                                    <svg className="spinner" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <circle cx="12" cy="12" r="10" strokeWidth="4" style={{opacity: 0.25}}></circle>
+                                                        <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" style={{opacity: 0.75}}></path>
+                                                    </svg>
+                                                    Creating Token...
+                                                </>
+                                            ) : 'Create Token'}
+                                        </button>
+
+                                        {!walletAddress && (
+                                            <p style={{textAlign: 'center', fontSize: '0.875rem', color: 'rgba(255,255,255,0.5)', marginTop: '1rem'}}>
+                                                Connect your wallet to create a token
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {activeTab === 'send' && (
+                                    <div className="card">
+                                        <div className="form-group">
+                                            <label className="label">Token Address *</label>
+                                            <input
+                                                type="text"
+                                                name="tokenAddress"
+                                                value={sendData.tokenAddress}
+                                                onChange={handleSendInputChange}
+                                                placeholder="Enter token mint address"
+                                                className="input"
+                                            />
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label className="label">Recipient Address *</label>
+                                            <input
+                                                type="text"
+                                                name="recipientAddress"
+                                                value={sendData.recipientAddress}
+                                                onChange={handleSendInputChange}
+                                                placeholder="Enter recipient wallet address"
+                                                className="input"
+                                            />
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label className="label">Amount *</label>
+                                            <input
+                                                type="number"
+                                                name="amount"
+                                                value={sendData.amount}
+                                                onChange={handleSendInputChange}
+                                                placeholder="Enter amount to send"
+                                                min="0"
+                                                step="any"
+                                                className="input"
+                                            />
+                                        </div>
+
+                                        <button onClick={sendTokens} disabled={!walletAddress || isSending} className="btn-create">
+                                            {isSending ? (
+                                                <>
+                                                    <svg className="spinner" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <circle cx="12" cy="12" r="10" strokeWidth="4" style={{opacity: 0.25}}></circle>
+                                                        <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" style={{opacity: 0.75}}></path>
+                                                    </svg>
+                                                    Sending Tokens...
+                                                </>
+                                            ) : 'Send Tokens'}
+                                        </button>
+
+                                        {!walletAddress && (
+                                            <p style={{textAlign: 'center', fontSize: '0.875rem', color: 'rgba(255,255,255,0.5)', marginTop: '1rem'}}>
+                                                Connect your wallet to send tokens
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {activeTab === 'liquidity' && (
+                                    <div className="card">
+                                        <div className="alert alert-info">
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <div style={{fontSize: '0.875rem'}}>
+                                                <p style={{fontWeight: 600, marginBottom: '0.5rem'}}>Add Liquidity to Raydium or Orca</p>
+                                                <p>To add liquidity for your token, visit:</p>
+                                                <ul style={{marginTop: '0.5rem', paddingLeft: '1.25rem'}}>
+                                                    <li><a href="https://raydium.io/liquidity/create/" target="_blank" rel="noopener noreferrer" className="external-link" style={{fontSize: '0.875rem'}}>Raydium Liquidity Pool</a></li>
+                                                    <li><a href="https://www.orca.so/" target="_blank" rel="noopener noreferrer" className="external-link" style={{fontSize: '0.875rem'}}>Orca Exchange</a></li>
+                                                </ul>
+                                                <p style={{marginTop: '0.75rem', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)'}}>
+                                                    Note: Make sure you've revoked freeze authority before creating a liquidity pool.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <div className="sidebar-card">
+                                    <h3 className="sidebar-title">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        Cost Breakdown
+                                    </h3>
+                                    <div className="cost-row">
+                                        <span>Network Fee</span>
+                                        <span style={{fontFamily: 'monospace'}}>~0.015 SOL</span>
+                                    </div>
+                                    <div className="cost-row">
+                                        <span>Platform Markup</span>
+                                        <span style={{fontFamily: 'monospace', color: '#86efac'}}>0.000 SOL</span>
+                                    </div>
+                                    <div className="cost-total">
+                                        <span>Total Cost</span>
+                                        <span style={{color: '#c084fc', fontFamily: 'monospace'}}>0.015 SOL</span>
+                                    </div>
+                                    <div className="savings">
+                                        💰 Save ~0.38 SOL vs other platforms!
+                                    </div>
+                                </div>
+
+                                <div className="sidebar-card">
+                                    <h3 className="sidebar-title">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                        </svg>
+                                        Features
+                                    </h3>
+                                    <ul className="feature-list">
+                                        <li className="feature-item">
+                                            <span className="checkmark">✓</span>
+                                            <span>No hidden fees or markup</span>
+                                        </li>
+                                        <li className="feature-item">
+                                            <span className="checkmark">✓</span>
+                                            <span>Direct blockchain interaction</span>
+                                        </li>
+                                        <li className="feature-item">
+                                            <span className="checkmark">✓</span>
+                                            <span>Send tokens to any wallet</span>
+                                        </li>
+                                        <li className="feature-item">
+                                            <span className="checkmark">✓</span>
+                                            <span>Create liquidity pools</span>
+                                        </li>
+                                        <li className="feature-item">
+                                            <span className="checkmark">✓</span>
+                                            <span>Open source code</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
