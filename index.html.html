@@ -807,6 +807,26 @@
                     return;
                 }
 
+                // Validate addresses
+                try {
+                    new window.solanaWeb3.PublicKey(sendData.tokenAddress);
+                } catch (err) {
+                    setError('Invalid token address. Please check and try again.');
+                    return;
+                }
+
+                try {
+                    new window.solanaWeb3.PublicKey(sendData.recipientAddress);
+                } catch (err) {
+                    setError('Invalid recipient address. Please check and try again.');
+                    return;
+                }
+
+                if (parseFloat(sendData.amount) <= 0) {
+                    setError('Amount must be greater than 0');
+                    return;
+                }
+
                 setIsSending(true);
                 setError(null);
                 setTxSignature(null);
@@ -817,90 +837,119 @@
 
                     const connection = await getConnection();
                     const walletPublicKey = provider.publicKey;
-                    const mintPubkey = new window.solanaWeb3.PublicKey(sendData.tokenAddress);
-                    const recipientPubkey = new window.solanaWeb3.PublicKey(sendData.recipientAddress);
+                    const mintPubkey = new window.solanaWeb3.PublicKey(sendData.tokenAddress.trim());
+                    const recipientPubkey = new window.solanaWeb3.PublicKey(sendData.recipientAddress.trim());
                     const TOKEN_PROGRAM_ID = new window.solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+                    const ASSOCIATED_TOKEN_PROGRAM_ID = new window.solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+
+                    console.log('Mint:', mintPubkey.toString());
+                    console.log('Recipient:', recipientPubkey.toString());
 
                     // Get mint info to determine decimals
                     const mintInfo = await connection.getAccountInfo(mintPubkey);
-                    if (!mintInfo) throw new Error('Token not found');
+                    if (!mintInfo) throw new Error('Token mint not found. Check the token address.');
+                    
                     const decimals = mintInfo.data[44];
+                    const amount = parseFloat(sendData.amount) * Math.pow(10, decimals);
 
-                    const amount = BigInt(Math.floor(parseFloat(sendData.amount) * Math.pow(10, decimals)));
+                    console.log('Decimals:', decimals, 'Amount:', amount);
 
                     // Get sender's token account
-                    const [senderTokenAccount] = await window.solanaWeb3.PublicKey.findProgramAddress(
+                    const senderTokenAccount = await window.solanaWeb3.PublicKey.findProgramAddressSync(
                         [
                             walletPublicKey.toBuffer(),
                             TOKEN_PROGRAM_ID.toBuffer(),
                             mintPubkey.toBuffer(),
                         ],
-                        new window.solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
+                        ASSOCIATED_TOKEN_PROGRAM_ID
                     );
 
+                    console.log('Sender token account:', senderTokenAccount[0].toString());
+
                     // Get recipient's token account
-                    const [recipientTokenAccount] = await window.solanaWeb3.PublicKey.findProgramAddress(
+                    const recipientTokenAccount = await window.solanaWeb3.PublicKey.findProgramAddressSync(
                         [
                             recipientPubkey.toBuffer(),
                             TOKEN_PROGRAM_ID.toBuffer(),
                             mintPubkey.toBuffer(),
                         ],
-                        new window.solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
+                        ASSOCIATED_TOKEN_PROGRAM_ID
                     );
+
+                    console.log('Recipient token account:', recipientTokenAccount[0].toString());
 
                     const transaction = new window.solanaWeb3.Transaction();
 
                     // Check if recipient account exists
-                    const recipientAccountInfo = await connection.getAccountInfo(recipientTokenAccount);
+                    const recipientAccountInfo = await connection.getAccountInfo(recipientTokenAccount[0]);
                     if (!recipientAccountInfo) {
+                        console.log('Creating recipient token account...');
                         // Create associated token account for recipient
                         transaction.add(
                             new window.solanaWeb3.TransactionInstruction({
+                                programId: ASSOCIATED_TOKEN_PROGRAM_ID,
                                 keys: [
                                     { pubkey: walletPublicKey, isSigner: true, isWritable: true },
-                                    { pubkey: recipientTokenAccount, isSigner: false, isWritable: true },
+                                    { pubkey: recipientTokenAccount[0], isSigner: false, isWritable: true },
                                     { pubkey: recipientPubkey, isSigner: false, isWritable: false },
                                     { pubkey: mintPubkey, isSigner: false, isWritable: false },
                                     { pubkey: window.solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
                                     { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
                                 ],
-                                programId: new window.solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL'),
-                                data: Buffer.from([])
+                                data: new Uint8Array(0)
                             })
                         );
                     }
 
-                    // Transfer tokens
-                    const transferData = Buffer.alloc(9);
+                    // Transfer tokens - convert amount to little-endian bytes
+                    const amountBytes = new Uint8Array(8);
+                    for (let i = 0; i < 8; i++) {
+                        amountBytes[i] = (amount / Math.pow(2, 8 * i)) & 0xff;
+                    }
+
+                    const transferData = new Uint8Array(9);
                     transferData[0] = 3; // Transfer instruction
-                    transferData.writeBigUInt64LE(amount, 1);
+                    transferData.set(amountBytes, 1);
 
                     transaction.add(
                         new window.solanaWeb3.TransactionInstruction({
+                            programId: TOKEN_PROGRAM_ID,
                             keys: [
-                                { pubkey: senderTokenAccount, isSigner: false, isWritable: true },
-                                { pubkey: recipientTokenAccount, isSigner: false, isWritable: true },
+                                { pubkey: senderTokenAccount[0], isSigner: false, isWritable: true },
+                                { pubkey: recipientTokenAccount[0], isSigner: false, isWritable: true },
                                 { pubkey: walletPublicKey, isSigner: true, isWritable: false }
                             ],
-                            programId: TOKEN_PROGRAM_ID,
                             data: transferData
                         })
                     );
 
-                    const { blockhash } = await connection.getLatestBlockhash();
+                    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
                     transaction.recentBlockhash = blockhash;
+                    transaction.lastValidBlockHeight = lastValidBlockHeight;
                     transaction.feePayer = walletPublicKey;
 
-                    const signed = await provider.signTransaction(transaction);
-                    const signature = await connection.sendRawTransaction(signed.serialize());
-                    await connection.confirmTransaction(signature);
+                    console.log('Signing transaction...');
+                    const signedTransaction = await provider.signTransaction(transaction);
+                    
+                    console.log('Sending transaction...');
+                    const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
+                        skipPreflight: false,
+                        preflightCommitment: 'confirmed'
+                    });
+
+                    console.log('Transaction sent:', signature);
+
+                    await connection.confirmTransaction({
+                        signature,
+                        blockhash,
+                        lastValidBlockHeight
+                    }, 'confirmed');
 
                     setTxSignature(signature);
                     setSendData({ tokenAddress: '', recipientAddress: '', amount: '' });
-                    alert(`Successfully sent ${sendData.amount} tokens!`);
 
                 } catch (err) {
-                    console.error('Error:', err);
+                    console.error('Error sending tokens:', err);
                     setError('Failed to send tokens: ' + err.message);
                 }
 
@@ -1222,27 +1271,31 @@
                                 {activeTab === 'send' && (
                                     <div className="card">
                                         <div className="form-group">
-                                            <label className="label">Token Address *</label>
+                                            <label className="label">Token Address (Mint Address) *</label>
                                             <input
                                                 type="text"
                                                 name="tokenAddress"
                                                 value={sendData.tokenAddress}
                                                 onChange={handleSendInputChange}
-                                                placeholder="Enter token mint address"
+                                                placeholder="e.g., EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
                                                 className="input"
+                                                style={{fontFamily: 'monospace', fontSize: '0.875rem'}}
                                             />
+                                            <p className="hint">The token mint address (copy from token creation or Solscan)</p>
                                         </div>
 
                                         <div className="form-group">
-                                            <label className="label">Recipient Address *</label>
+                                            <label className="label">Recipient Wallet Address *</label>
                                             <input
                                                 type="text"
                                                 name="recipientAddress"
                                                 value={sendData.recipientAddress}
                                                 onChange={handleSendInputChange}
-                                                placeholder="Enter recipient wallet address"
+                                                placeholder="e.g., 7EcDhSYGxXyscszYEp35KHN8vvw3svAuLKTzXwCFLtV"
                                                 className="input"
+                                                style={{fontFamily: 'monospace', fontSize: '0.875rem'}}
                                             />
+                                            <p className="hint">The recipient's Solana wallet address</p>
                                         </div>
 
                                         <div className="form-group">
@@ -1252,11 +1305,25 @@
                                                 name="amount"
                                                 value={sendData.amount}
                                                 onChange={handleSendInputChange}
-                                                placeholder="Enter amount to send"
+                                                placeholder="e.g., 100"
                                                 min="0"
                                                 step="any"
                                                 className="input"
                                             />
+                                            <p className="hint">Amount of tokens to send (will use token's decimals)</p>
+                                        </div>
+
+                                        <div className="alert alert-info" style={{marginBottom: '1.5rem'}}>
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <div style={{fontSize: '0.875rem'}}>
+                                                <p style={{fontWeight: 600, marginBottom: '0.25rem'}}>How to find addresses:</p>
+                                                <ul style={{paddingLeft: '1.25rem', marginTop: '0.5rem'}}>
+                                                    <li><strong>Token Address:</strong> Copy from your token creation success message above, or find it on Solscan</li>
+                                                    <li><strong>Recipient Address:</strong> Get the recipient's Solana wallet address from their wallet</li>
+                                                </ul>
+                                            </div>
                                         </div>
 
                                         <button onClick={sendTokens} disabled={!walletAddress || isSending} className="btn-create">
